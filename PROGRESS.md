@@ -35,6 +35,24 @@
    - Initial admin secret didn't match — reset password manually via `argocd-secret` patch + server restart
    - Installed `argocd` CLI via brew (v3.3.6)
 
+7. **Apps-of-apps pattern** (2026-04-16)
+   - Created `root-app.yaml` — root Application watches `apps/` folder in repo
+   - `kubectl apply -f root-app.yaml` — only manual apply needed, everything else is GitOps
+   - Auto-sync enabled (`prune: true`, `selfHeal: true`)
+
+8. **Sample app: nginx** (2026-04-16)
+   - `apps/nginx.yaml` — child Application, picked up automatically by root app
+   - `manifests/nginx/deployment.yaml` — nginx:1.27, 1 replica
+   - `manifests/nginx/service.yaml` — ClusterIP on port 80
+   - `CreateNamespace=true` — ArgoCD auto-creates `nginx` namespace
+   - Verified: pod running in `nginx` namespace
+
+### Phase 1 Complete
+
+## Phase 2: Enterprise Hardening
+
 ### Next Steps
-- [ ] Create root Application (apps-of-apps pattern)
-- [ ] Deploy a sample app through ArgoCD
+- [ ] RBAC and Azure AD integration
+- [ ] Secrets management (Azure Key Vault + External Secrets or Sealed Secrets)
+- [ ] Multi-environment (dev/staging/prod)
+- [ ] Ingress, TLS, DNS
