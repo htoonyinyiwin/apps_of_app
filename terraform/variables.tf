@@ -28,3 +28,8 @@ variable "vm_size" {
   description = "VM size for AKS nodes"
   type        = string
 }
+
+variable "keyvault_name" {
+  description = "Name of the Azure Key Vault (must be globally unique)"
+  type        = string
+}

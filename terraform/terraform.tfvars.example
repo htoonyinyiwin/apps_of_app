@@ -7,3 +7,4 @@ resource_group_name = "rg-dbot-aks"
 cluster_name        = "aks-dbot-cluster"
 node_count          = 1
 vm_size             = "Standard_B2s"
+keyvault_name       = "kv-your-project-name"

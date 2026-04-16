@@ -63,20 +63,51 @@
 
 ## Phase 2: Enterprise Hardening
 
+### Steps Completed
+
+11. **NGINX Ingress Controller** (2026-04-16)
+    - `apps/ingress-nginx.yaml` — deployed via ArgoCD using official Helm chart (`ingress-nginx 4.12.1`)
+    - AKS automatically provisions an Azure Load Balancer with public IP when it sees a `LoadBalancer` type Service
+    - External IP: `20.212.122.86`
+    - AKS also auto-creates a managed resource group (`MC_rg-proj-aks_...`) with VMs, VNet, NSG, LB, managed identities
+    - Enterprise note: production teams pre-provision VNet, static IPs, DNS zones in Terraform; let AKS manage node-level resources
+
+12. **Ingress rule + nip.io DNS** (2026-04-16)
+    - `manifests/nginx/ingress.yaml` — routes `nginx.20.212.122.86.nip.io` → nginx Service
+    - **nip.io** — free DNS service, embeds IP in hostname (e.g., `anything.1.2.3.4.nip.io` → `1.2.3.4`). Acts like a DNS provider (similar to GoDaddy) but automatic, no purchase needed. Good for dev/learning, not for production.
+    - Ingress controller reads the `Host` header and routes to the correct Service — multiple apps can share one public IP with different hostnames
+    - Verified: `http://nginx.20.212.122.86.nip.io` accessible from browser without port-forward
+
+13. **TLS with cert-manager + Let's Encrypt** (2026-04-16)
+    - `apps/cert-manager.yaml` — cert-manager Helm chart (v1.17.2) with CRDs enabled
+    - `apps/cert-manager-config.yaml` — points to `manifests/cert-manager-config/`
+    - `manifests/cert-manager-config/cluster-issuer.yaml` — ClusterIssuer using Let's Encrypt (ACME, HTTP-01 challenge)
+    - Updated `manifests/nginx/ingress.yaml` — added `cert-manager.io/cluster-issuer` annotation + `tls` block with `secretName: nginx-tls`
+    - How it works: cert-manager sees the annotation → requests cert from Let's Encrypt → Let's Encrypt verifies domain via HTTP-01 challenge (hits `/.well-known/acme-challenge/` on the public IP) → cert stored in K8s Secret → ingress controller serves HTTPS
+    - Certs auto-renew every 60 days
+    - Verified: `https://nginx.20.212.122.86.nip.io` shows valid HTTPS lock
+
+### Folder structure learned
+- `apps/` — ArgoCD Application manifests (`kind: Application`) — pointers that tell ArgoCD what/where to deploy
+- `manifests/` — actual K8s resources (Deployments, Services, Ingresses, ClusterIssuers, etc.)
+- Helm-based apps (ingress-nginx, cert-manager) don't need a `manifests/` folder — the chart is the source
+
+14. **AKS RBAC + Azure AD** (2026-04-16)
+    - Two layers: **Azure AD** = who you are (identity), **Azure RBAC** = what you can do (permissions)
+    - Added `azuread` provider to `providers.tf`
+    - Updated `aks.tf` — enabled `azure_active_directory_role_based_access_control` with `azure_rbac_enabled = true`
+    - Created `rbac.tf` — role assignments separated from cluster config
+    - Enterprise approach (commented out, needs AD admin): create `azuread_group` for aks-admins/aks-developers, attach RBAC roles to groups. Manage access by adding/removing people from groups.
+    - Our approach (option 2): assigned current user directly as Cluster Admin via `azurerm_role_assignment`
+    - Fixed Terraform drift — Azure auto-enabled `azure_policy_enabled`, `microsoft_defender`, and `upgrade_settings` that weren't in our Terraform. Added them to `aks.tf` to prevent `→ null` changes.
+    - Applied: `terraform plan -var-file=dev.tfvars` → 1 to add, 1 to change, 0 to destroy
+    - **Two AKS roles needed** when Azure RBAC mode is enabled:
+      - `Azure Kubernetes Service Cluster Admin Role` — lets you get credentials (`az aks get-credentials`)
+      - `Azure Kubernetes Service RBAC Cluster Admin` — lets you actually run kubectl commands
+    - Installed `kubelogin` via brew — required for Azure AD auth with kubectl
+    - `kubelogin convert-kubeconfig -l azurecli` — converts kubeconfig to use Azure CLI auth flow
+    - Re-fetch credentials after enabling AD: `az aks get-credentials --resource-group rg-proj-aks --name aks-proj-cluster --overwrite-existing`
+
 ### Next Steps
-- [ ] RBAC and Azure AD integration
 - [ ] Secrets management (Azure Key Vault + External Secrets or Sealed Secrets)
 - [ ] Multi-environment (dev/staging/prod)
-- [ ] Ingress, TLS, DNS
-
-
-
-RBAC + Azure AD — lock down who can access ArgoCD and the cluster
-
-Secrets management — Azure Key Vault + External Secrets so you never put secrets in git
-
-Multi-environment — separate dev/staging/prod with ArgoCD ApplicationSets
-
-Ingress + TLS + DNS — expose ArgoCD and apps via a real domain instead of port-forward
-
-are we using ingress controller? deprecated?
