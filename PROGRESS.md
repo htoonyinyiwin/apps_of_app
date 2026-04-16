@@ -47,6 +47,18 @@
    - `CreateNamespace=true` — ArgoCD auto-creates `nginx` namespace
    - Verified: pod running in `nginx` namespace
 
+9. **Testing the pattern: httpbin** (2026-04-16)
+   - `apps/httpbin.yaml` — second child app, deployed automatically by root app
+   - `manifests/httpbin/` — deployment (kennethreitz/httpbin) + service
+   - ArgoCD didn't show it immediately — learned that ArgoCD **polls git every 3 minutes** by default
+   - Forced sync via: `argocd app get root-app --refresh`
+   - Can also click "Refresh" in the UI or set up GitHub webhooks for instant sync (Phase 2)
+
+10. **Testing the pattern: httpbin-2** (2026-04-16)
+    - `apps/httpbin-2.yaml` — third child app, another copy to confirm the pattern
+    - `manifests/httpbin-2/` — deployment + service
+    - Proves: just drop a YAML into `apps/`, push, and ArgoCD deploys it — **git push is the deployment tool**
+
 ### Phase 1 Complete
 
 ## Phase 2: Enterprise Hardening
@@ -56,3 +68,15 @@
 - [ ] Secrets management (Azure Key Vault + External Secrets or Sealed Secrets)
 - [ ] Multi-environment (dev/staging/prod)
 - [ ] Ingress, TLS, DNS
+
+
+
+RBAC + Azure AD — lock down who can access ArgoCD and the cluster
+
+Secrets management — Azure Key Vault + External Secrets so you never put secrets in git
+
+Multi-environment — separate dev/staging/prod with ArgoCD ApplicationSets
+
+Ingress + TLS + DNS — expose ArgoCD and apps via a real domain instead of port-forward
+
+are we using ingress controller? deprecated?
