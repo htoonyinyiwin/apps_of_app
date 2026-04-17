@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: nginx
+  namespace: argocd
+spec:
+  generators:
+    # List generator — one entry per environment.
+    # Adding a new env = adding one line here. No new YAML files needed.
+    - list:
+        elements:
+          - env: dev
+          - env: staging
+          - env: prod
+  template:
+    metadata:
+      # Generates: nginx-dev, nginx-staging, nginx-prod
+      name: nginx-{{env}}
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/htoonyinyiwin/apps_of_app.git
+        targetRevision: main
+        # Each env points to its own Kustomize overlay
+        path: manifests/nginx/overlays/{{env}}
+      destination:
+        server: https://kubernetes.default.svc
+        # Each env gets its own namespace
+        namespace: nginx-{{env}}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
