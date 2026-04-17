@@ -127,13 +127,38 @@
     - Renamed resources: Key Vault → `kv-proj-cluster-vault`, Identity → `id-proj-externalsecrets` (caused full recreate — 6 add, 6 destroy)
     - Outputs: `external_secrets_client_id = a45fefa0-4409-4bfe-8a2d-736c2ce7cdc2`, `keyvault_name = kv-proj-cluster-vault`
 
-16. **Secrets management — K8s side** (2026-04-17) — IN PROGRESS
+16. **Secrets management — K8s side** (2026-04-17)
     - Created `apps/external-secrets.yaml` — ESO Helm chart (v0.14.4) with Workload Identity annotations (`azure.workload.identity/client-id` + label)
     - Created `apps/external-secrets-config.yaml` — points to `manifests/external-secrets-config/`
     - Created `manifests/external-secrets-config/secret-store.yaml` — SecretStore connecting to `kv-proj-cluster-vault` via WorkloadIdentity
     - Created `manifests/external-secrets-config/external-secret.yaml` — ExternalSecret pulling `proj-api-key` from Key Vault, refreshes every 1m
-    - **Status:** Files created, needs push + ArgoCD sync + verification
+    - **Fix:** SecretStore was initially `Degraded` — missing `tenantId` field. Added `tenantId` to `secret-store.yaml`, ArgoCD synced, SecretStore became Ready
+    - **Verified:** SecretStore → `store validated`, ExternalSecret → `SecretSynced`, K8s Secret `proj-api-key` auto-created with correct value
+    - Full chain working: **Key Vault → Workload Identity → ESO → K8s Secret**
+    - Tenant ID and Client ID are **not secrets** — they are public identifiers, safe in git. Only actual secret values (passwords, API keys, tokens) must stay out of git.
+
+17. **cert-manager OutOfSync fix** (2026-04-17)
+    - cert-manager webhook showed `OutOfSync` in ArgoCD — caused by cert-manager injecting its own `caBundle` into the `ValidatingWebhookConfiguration` at runtime
+    - The Helm chart deploys it empty, cert-manager fills it in → ArgoCD sees drift
+    - Added `ignoreDifferences` block to `apps/cert-manager.yaml` with `jsonPointers` for `/webhooks/*/clientConfig/caBundle`
+    - This is a common pattern for any operator that self-injects certs
+
+18. **Multi-environment with ApplicationSet + Kustomize** (2026-04-17)
+    - **The problem:** single Application deploys one copy of an app. Production needs dev/staging/prod with different configs.
+    - **The solution:** ApplicationSet (generates Applications from a template) + Kustomize (base + overlays for per-env customization)
+    - Restructured `manifests/nginx/` into Kustomize layout:
+      - `base/` — shared deployment (nginx:1.27) + service (port 80)
+      - `overlays/dev/` — 1 replica, hostname `nginx-dev.20.212.122.86.nip.io`
+      - `overlays/staging/` — 2 replicas, hostname `nginx-staging.20.212.122.86.nip.io`
+      - `overlays/prod/` — 3 replicas, hostname `nginx-prod.20.212.122.86.nip.io`
+    - Kustomize `patches` — overlay merges on top of base. `replica-patch.yaml` only specifies the fields to override (e.g., `replicas: 2`), rest comes from base
+    - Created `apps/nginx-appset.yaml` — ApplicationSet with **list generator**, loops over `[dev, staging, prod]`, generates 3 Applications: `nginx-dev`, `nginx-staging`, `nginx-prod`
+    - Commented out `apps/nginx.yaml` — old single-env approach, replaced by ApplicationSet
+    - **Production pattern:** Individual `Application` for cluster infra (ingress, cert-manager, ESO). `ApplicationSet` for workloads that need multi-env.
+    - Added `ARCHITECTURE.md` — Mermaid diagrams for overall architecture, ArgoCD flow, secrets flow, traffic flow, folder structure
+
+### Phase 2 Complete
 
 ### Next Steps
-- [ ] Push External Secrets files, sync ArgoCD, verify K8s Secret is auto-created from Key Vault
-- [ ] Multi-environment (dev/staging/prod)
+- [ ] Verify ApplicationSet generates 3 apps in ArgoCD UI
+- [ ] Further topics: GitHub webhooks (instant sync), network policies, monitoring, CI/CD pipeline
