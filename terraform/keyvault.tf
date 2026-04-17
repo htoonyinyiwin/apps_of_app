@@ -20,7 +20,7 @@ resource "azurerm_role_assignment" "keyvault_admin" {
 
 # Managed Identity that External Secrets Operator will use
 resource "azurerm_user_assigned_identity" "external_secrets" {
-  name                = "id-external-secrets"
+  name                = "id-proj-externalsecrets"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
 }
