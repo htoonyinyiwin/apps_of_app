@@ -124,8 +124,16 @@
     - **Gotcha:** `enable_rbac_authorization` was deprecated and silently ignored — Key Vault created without RBAC. Fixed with `rbac_authorization_enabled = true` and `az keyvault update --enable-rbac-authorization true`.
     - **Gotcha:** RBAC Cluster Admin role was created manually with `az role assignment create`, then Terraform failed with conflict. Fixed with `terraform import` to bring existing resource into state.
     - Applied: Key Vault + Managed Identity + federated credential + demo secret all created
-    - Outputs: `external_secrets_client_id = fa7e21d3-3370-4bde-b265-b66dd6362495`, `keyvault_name = kv-proj-aks-brian`
+    - Renamed resources: Key Vault → `kv-proj-cluster-vault`, Identity → `id-proj-externalsecrets` (caused full recreate — 6 add, 6 destroy)
+    - Outputs: `external_secrets_client_id = a45fefa0-4409-4bfe-8a2d-736c2ce7cdc2`, `keyvault_name = kv-proj-cluster-vault`
+
+16. **Secrets management — K8s side** (2026-04-17) — IN PROGRESS
+    - Created `apps/external-secrets.yaml` — ESO Helm chart (v0.14.4) with Workload Identity annotations (`azure.workload.identity/client-id` + label)
+    - Created `apps/external-secrets-config.yaml` — points to `manifests/external-secrets-config/`
+    - Created `manifests/external-secrets-config/secret-store.yaml` — SecretStore connecting to `kv-proj-cluster-vault` via WorkloadIdentity
+    - Created `manifests/external-secrets-config/external-secret.yaml` — ExternalSecret pulling `proj-api-key` from Key Vault, refreshes every 1m
+    - **Status:** Files created, needs push + ArgoCD sync + verification
 
 ### Next Steps
-- [ ] Secrets management — K8s side (External Secrets Operator + SecretStore + ExternalSecret)
+- [ ] Push External Secrets files, sync ArgoCD, verify K8s Secret is auto-created from Key Vault
 - [ ] Multi-environment (dev/staging/prod)
