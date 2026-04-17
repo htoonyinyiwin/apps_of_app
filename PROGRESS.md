@@ -108,6 +108,24 @@
     - `kubelogin convert-kubeconfig -l azurecli` — converts kubeconfig to use Azure CLI auth flow
     - Re-fetch credentials after enabling AD: `az aks get-credentials --resource-group rg-proj-aks --name aks-proj-cluster --overwrite-existing`
 
+15. **Secrets management — Terraform infra** (2026-04-17)
+    - **The problem:** apps need secrets but you can't put them in git (public repo)
+    - **The solution:** Azure Key Vault + External Secrets Operator + Workload Identity
+    - Flow: Key Vault (stores secrets) → Workload Identity (passwordless auth) → External Secrets Operator (pulls secrets) → K8s Secret (apps use as env vars/volumes)
+    - Updated `aks.tf` — enabled `oidc_issuer_enabled` + `workload_identity_enabled`
+    - Created `keyvault.tf`:
+      - `azurerm_key_vault` — standard SKU, `rbac_authorization_enabled = true`
+      - `azurerm_user_assigned_identity` — Managed Identity for External Secrets Operator (no password, uses federated auth)
+      - `azurerm_federated_identity_credential` — links K8s service account `external-secrets:external-secrets` to the Managed Identity. AKS OIDC issuer certifies pod identity → Azure trusts it → pod can read Key Vault
+      - `azurerm_key_vault_secret` — demo secret `proj-api-key` for testing
+      - Role assignments: `Key Vault Secrets Officer` (you), `Key Vault Secrets User` (Managed Identity)
+    - Added `keyvault_name` variable + output for `external_secrets_client_id`
+    - Updated `providers.tf` — Helm provider switched from `kube_config` to `kube_admin_config` (old config broke after Azure AD RBAC was enabled). Old config commented out with explanation.
+    - **Gotcha:** `enable_rbac_authorization` was deprecated and silently ignored — Key Vault created without RBAC. Fixed with `rbac_authorization_enabled = true` and `az keyvault update --enable-rbac-authorization true`.
+    - **Gotcha:** RBAC Cluster Admin role was created manually with `az role assignment create`, then Terraform failed with conflict. Fixed with `terraform import` to bring existing resource into state.
+    - Applied: Key Vault + Managed Identity + federated credential + demo secret all created
+    - Outputs: `external_secrets_client_id = fa7e21d3-3370-4bde-b265-b66dd6362495`, `keyvault_name = kv-proj-aks-brian`
+
 ### Next Steps
-- [ ] Secrets management (Azure Key Vault + External Secrets or Sealed Secrets)
+- [ ] Secrets management — K8s side (External Secrets Operator + SecretStore + ExternalSecret)
 - [ ] Multi-environment (dev/staging/prod)
