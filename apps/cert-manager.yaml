@@ -5,6 +5,18 @@ metadata:
   namespace: argocd
 spec:
   project: default
+  # cert-manager injects its own CA certificate (caBundle) into the webhook at runtime.
+  # The Helm chart deploys it empty, then cert-manager fills it in.
+  # Without this, ArgoCD sees the live resource differs from the chart and marks it OutOfSync.
+  # This is a common pattern for any operator that self-injects certs.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: cert-manager-webhook
+      jsonPointers:
+        - /webhooks/0/clientConfig/caBundle
+        - /webhooks/1/clientConfig/caBundle
+        - /webhooks/2/clientConfig/caBundle
   source:
     repoURL: https://charts.jetstack.io
     chart: cert-manager
